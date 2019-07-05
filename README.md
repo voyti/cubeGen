@@ -1,4 +1,5 @@
 # CubeGen
+Cube based 3d object generation tool built with THREE.js
 
 This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 7.3.9.
 
