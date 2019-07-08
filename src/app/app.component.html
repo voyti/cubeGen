@@ -1,22 +1,91 @@
 <!--The content below is only a placeholder and can be replaced.-->
-<div class="main-view" id="main-3d-container">
-</div>
-
-<div class="side-panel">
-  <div>
-    <label *ngFor="let camera of cameras">
-        <input type="radio" [(ngModel)]="usedCameraModel" name="cameras" value="{{camera.id}}" (change)="onCameraChange(camera)"/> {{camera.name}}
-    </label>
-</div>
-
-<div class="color-palette">
-  <div class="color-box"
-    *ngFor="let color of palette"
-    [ngStyle]="{ 'background-color': color.color }"
-    (mousedown)="pickColor(color)"
-    [ngClass]="{ 'selected': pickedColor === color }">
+<div class="app-container">
+  <div class="logo-panel">
+    <img src="../assets/logo.svg" alt="">
+    <div class="text">
+        <h1>CubeGen</h1>
+        <h3>Efficiency-oriented 3d pixelart editor</h3>
+    </div>
   </div>
+
+    <div class="main-view" id="main-3d-container">
+    </div>
+
+    <div class="side-panel">
+      <div class="height-panel">
+        <div>
+          <img src="../assets/box.svg" class="box-img" alt="">
+          <span class="level-label">{{usedLevel + 1}}</span>
+          <div *ngIf="usedLevel > 0" class="distance-img" [ngStyle]="{ height: distanceUiTop }"></div>
+          <img src="../assets/ground.svg"  [ngStyle]="{ top: groundUiTop }" class="ground-img" alt="">
+        </div>
+      </div>
+
+      <div class="controls-panel">
+        <label *ngFor="let camera of cameras">
+            <input type="radio" [(ngModel)]="usedCameraModel" name="cameras" value="{{camera.id}}" (change)="onCameraChange(camera)"/> {{camera.name}}
+        </label>
+
+        <div class="color-palette">
+          <div class="color-box"
+            *ngFor="let color of palette"
+            [ngStyle]="{ 'background-color': color.color }"
+            (mousedown)="pickColor(color)"
+            [ngClass]="{ 'selected': pickedColor === color }">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-actions">
+      <div class="get-obj" (mousedown)="getModelFromProject('obj')"><img src="../assets/export_obj.svg" alt=""><span>Get as OBJ</span></div>
+      <div class="get-gltf" (mousedown)="getModelFromProject('gltf')"><img src="../assets/export_gltf.svg" alt=""><span>Get as GLTF</span></div>
+    </div>
 </div>
+
+
+<div class="help-panel">
+
+  <div class="chunk">
+      <div class="mouse" title="LClick - Insert, Middle Click - Delete, Mouse Wheel - Change Level">  <img src="../assets/mouse.svg" alt=""></div>
+  </div>
+
+  <div class="chunk">
+      <div class="line-w">
+          <div class="key" title="Move Inward"> <img src="../assets/key.png" alt="">W</div>
+      </div>
+      <div class="line">
+          <div class="key" title="Move Left"> <img src="../assets/key.png" alt="">A</div>
+          <div class="key" title="Move Outward">  <img src="../assets/key.png" alt="">S</div>
+          <div class="key" title="Move Right">  <img src="../assets/key.png" alt="">D</div>
+      </div>
+  </div>
+
+  <div class="chunk">
+      <div class="line-w">
+          <div class="key" title="Rotate Forward">  <img src="../assets/key.png" alt="">I</div>
+          <div class="key" title="Switch to Orthogonal Camera"> <img src="../assets/key.png" alt="">O</div>
+          <div class="key" title="Switch to Perspective Camera">  <img src="../assets/key.png" alt="">P</div>
+      </div>
+      <div class="line">
+          <div class="key" title="Rotate Clockwise">  <img src="../assets/key.png" alt="">J</div>
+          <div class="key" title="Move Outward">  <img src="../assets/key.png" alt="">K</div>
+          <div class="key" title="Rotate Counter-Clockwise">  <img src="../assets/key.png" alt="">L</div>
+      </div>
+  </div>
+
+  <div class="chunk">
+      <div class="line">
+          <div class="key" title="Delete Box at Cursor">  <img src="../assets/key.png" alt="">DEL</div>
+      </div>
+  </div>
+
+  <div class="chunk">
+      <div class="line">
+          <div class="key wide" title="Export To File (GLTF)">  <img src="../assets/key.png" alt="">ENTER</div>
+      </div>
+  </div>
+
 </div>
 
 <router-outlet></router-outlet>
