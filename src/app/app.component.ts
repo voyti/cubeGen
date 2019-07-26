@@ -32,6 +32,10 @@ export class AppComponent {
   usedCameraModel: string = 'ortographic';
   usedLevel = 0;
   projectModel = [];
+  storedComponents = [];
+  componentShotRequested = false;
+  preparedForComponentShot = false;
+
   brushZones = {};
   projectGroup: THREE.Group;
   cameraRotationInProgress = false;
@@ -111,7 +115,12 @@ export class AppComponent {
 
     this.canvasContainer.addEventListener('mousemove', (e) => this.onDocumentMouseMove(e), false);
     this.canvasContainer.addEventListener('click', (e) => { this.onDocumentClick(); e.preventDefault(); }, false);
-    this.canvasContainer.addEventListener('mousedown', (e) => { if (e.which === 2) this.deleteBoxAtCursor() }, false); // middle mouse
+    this.canvasContainer.addEventListener('mousedown', (e) => {
+      if (e.which === 2) {
+        this.deleteBoxAtCursor();
+        e.preventDefault();
+      }
+    }, false); // middle mouse
     this.canvasContainer.addEventListener('wheel', (e) => {
       if (e.deltaY > 0) this.changeSnappingPlaneLevel(-1);
       if (e.deltaY < 0) this.changeSnappingPlaneLevel(1);
@@ -400,7 +409,20 @@ export class AppComponent {
     const animate = () => {
       requestAnimationFrame(animate);
       // this.orbitControls.update();
-      this.renderer.render( scene, this.usedCamera);
+      this.renderer.render(scene, this.usedCamera);
+
+      if (this.componentShotRequested) {
+        if (!this.preparedForComponentShot) {
+          _.forEach(this.projectGroup.children, (elem) => (elem.visible = false));
+          this.preparedForComponentShot = true; // TODO: fix hiding project content for shot
+        } else {
+          _.last(this.storedComponents).imgSrc = this.renderer.domElement.toDataURL('image/png');
+          _.forEach(this.projectGroup.children, (elem) => (elem.visible = true));
+          this.preparedForComponentShot = false;
+          this.componentShotRequested = false;
+        }
+      }
+
       this.raycaster.setFromCamera(this.mouse, this.usedCamera);
       const intersections = this.raycaster.intersectObjects([this.snappingPlane]);
       const intersection = (intersections.length) > 0 ? intersections[ 0 ] : null;
@@ -439,11 +461,14 @@ export class AppComponent {
     if (isOnBoxBottom) testPoint.y = testPoint.y + CUBE_SIZE / 2;
 
     const checkIfPlaceTaken = (point, level) => {
-      return _.find(this.projectModel[level], ['point', point]);
+      return _.find(_.filter(this.projectModel, ['level', level]), ['point', point]);
     };
 
     const checkIfExistsAdjacent = (point, level, coordConfig) => {
-      const sameOrAdjacentLayerObjs = [...this.projectModel[level] || [], ...this.projectModel[level - 1] || [], ...this.projectModel[level + 1] || []];
+      const levelAbove = _.filter(this.projectModel, ['level', level + 1]);
+      const sameLevel = _.filter(this.projectModel, ['level', level]);
+      const levelBelow = _.filter(this.projectModel, ['level', level - 1]);
+      const sameOrAdjacentLayerObjs = [...levelAbove, ...sameLevel, ...levelBelow];
 
       return _.find(sameOrAdjacentLayerObjs, (obj) =>
         (obj.point[coordConfig[0]] === point[coordConfig[0]] && obj.point[coordConfig[1]] === point[coordConfig[1]]) &&
@@ -478,8 +503,8 @@ export class AppComponent {
         box.userData.level = this.usedLevel;
         this.projectGroup.add(box);
 
-        this.projectModel[this.usedLevel] =  this.projectModel[this.usedLevel] || [];
-        this.projectModel[this.usedLevel].push({
+        this.projectModel.push({
+          level: this.usedLevel,
           point: snappedBoxPoint,
           color,
           box,
@@ -530,7 +555,7 @@ export class AppComponent {
   }
 
   deleteBoxAtCursor() {
-    const intersections = this.raycaster.intersectObjects(_.compact(_.map(_.flatten(this.projectModel), 'box')));
+    const intersections = this.raycaster.intersectObjects(_.compact(_.map(this.projectModel, 'box')));
     const intersection = (intersections.length) > 0 ? intersections[ 0 ] : null;
     if (intersection) {
       this.deleteFromProject(intersection.object);
@@ -538,7 +563,7 @@ export class AppComponent {
   }
 
   clearProject() {
-    this.projectModel = _.map(this.projectModel, () => []);
+    this.projectModel = [];
 
     const removedIds = _.map(this.projectGroup.children, 'id');
     _.forEach(removedIds, (id) => { this.projectGroup.remove(this.projectGroup.getObjectById(id)); });
@@ -548,14 +573,14 @@ export class AppComponent {
   deleteFromProject(boxMesh) {
     if (_.isNil(boxMesh.userData.level)) console.error('BOX WITHOUT LEVEL DATA (REQUIRED TO CORRECTLY DELETE AND EXPORT AND MORE) FOUND IN deleteFromProject', boxMesh);
 
-    _.remove(this.projectModel[boxMesh.userData.level], ['box.uuid', boxMesh.uuid]);
+    _.remove(this.projectModel, ['box.uuid', boxMesh.uuid]);
     this.projectGroup.remove(boxMesh);
     this.reapplySnappingAlignmentHint(this.snappingFocus);
   }
 
   getModelFromProject(type = 'dae') {
     const FACES_PER_BOX = 12;
-    const boxes = _.compact(_.map(_.flatten(this.projectModel), 'box'));
+    const boxes = _.compact(_.map(this.projectModel, 'box'));
     const resultGeometry = new THREE.Geometry();
     const projectMaterials = _.flatMap(boxes, 'material');
     _.forEach(boxes, (box) => resultGeometry.mergeMesh(box));
@@ -572,7 +597,7 @@ export class AppComponent {
 
   handleProjectFileOutput() {
     const exportProject = _.clone(this.projectModel);
-    _.forEach(exportProject, (level) => _.forEach(level, (element) => (element.box = null)));
+    _.forEach(exportProject, (element) => (element.box = null));
     this.exportService.exportToProjectFile(exportProject);
   }
 
@@ -582,6 +607,7 @@ export class AppComponent {
     reader.onload = () => {
       const importedProject = JSON.parse(<string>reader.result);
       this.addGhostModelFromSubProject(importedProject);
+      this.storeComponent(importedProject);
     };
 
     reader.readAsText(input[0]);
@@ -589,28 +615,39 @@ export class AppComponent {
   }
 
   addSkidMark() {
-    const geometry = new THREE.PlaneBufferGeometry( CUBE_SIZE, 0.1, 1);
-    const material = new THREE.MeshBasicMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
-    const plane = new THREE.Mesh(geometry, material);
-    plane.position.copy(this.snappingFocus.position);
-    this.scene.add(plane);
-    this.skidMarks.push(plane);
+    const geometry = new THREE.PlaneBufferGeometry( CUBE_SIZE, TERRAIN_SIZE, 1);
+    const material = new THREE.MeshBasicMaterial( {color: 0xffff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 } );
+    const planeX = new THREE.Mesh(geometry, material);
+    const planeZ = new THREE.Mesh(geometry, material);
+
+    planeX.position.copy(this.snappingFocus.position);
+    planeZ.position.copy(this.snappingFocus.position);
+
+    planeX.position.y -= CUBE_SIZE / 2;
+    planeZ.position.y -= CUBE_SIZE / 2;
+
+    planeX.rotation.x = Math.PI / 2;
+    planeZ.rotation.z = Math.PI / 2;
+
+    this.scene.add(planeX);
+    this.scene.add(planeZ);
+    this.skidMarks.push({ planeX, planeZ });
   }
 
   clearSkidMarks() {
     const idsToClean = _.map(this.skidMarks, 'id');
-    _.forEach(idsToClean, (id) => this.scene.remove(this.scene.getElementById(id)));
+    _.forEach(idsToClean, (id) => this.scene.remove(this.scene.getObjectById(id)));
   }
 
   addGhostModelFromSubProject(subProject) {
     const ghostGroup = new THREE.Group();
     ghostGroup.name = 'ghostGroup';
     const controlObject = new Object3D();
-    _.forEach(subProject, (level) => _.forEach(level, (object) => {
+    _.forEach(subProject, (object) => {
       const box = this.getStandardBox(object.color, 0.5);
       box.position.copy(new THREE.Vector3(object.point.x, object.point.y, object.point.z));
       ghostGroup.add(box);
-    }));
+    });
 
     this.setOrbitMode(true);
 
@@ -660,21 +697,34 @@ export class AppComponent {
   }
 
   applySubProject(subProject, shiftedPosition) {
-    _.forEach(subProject, (levelContent, level) => {
-      _.forEach(levelContent, (object) => {
-        const box = this.getStandardBox(object.color);
-        const boxPosition = new THREE.Vector3(object.point.x + shiftedPosition.x, object.point.y + shiftedPosition.y, object.point.z + shiftedPosition.z);
-        box.position.copy(boxPosition);
+    _.forEach(subProject, (object) => {
+      const box = this.getStandardBox(object.color);
+      const boxPosition = new THREE.Vector3(object.point.x + shiftedPosition.x, object.point.y + shiftedPosition.y, object.point.z + shiftedPosition.z);
+      box.position.copy(boxPosition);
 
-        this.projectGroup.add(box);
-        this.projectModel[level] = this.projectModel[level] ? this.projectModel[level] : [];
-        box.userData.level = level;
-        this.projectModel[level].push({
-          point: boxPosition,
-          color: object.color,
-          box,
-        });
+      this.projectGroup.add(box);
+      box.userData.level = object.level;
+      this.projectModel.push({
+        point: boxPosition,
+        color: object.color,
+        box,
       });
     });
+  }
+
+  insertComponent(component) {
+    this.addGhostModelFromSubProject(component.componentData);
+  }
+
+  storeComponent(componentData) {
+
+    const component = {
+      id: Math.random().toString(36).substring(2,12),
+      componentData,
+    };
+    this.storedComponents.push(component);
+    this.componentShotRequested = true;
+
+    _.forEach(this.projectModel, (elem) => (elem.box.visible = false));
   }
 }

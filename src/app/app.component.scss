@@ -263,3 +263,28 @@
     opacity: 0.5;
   }
 }
+
+.components-panel {
+  display: inline-block;
+  width: 1200px;
+  height: 140px;
+  margin: 28px;
+  background-color: #fbfbfb;
+  box-shadow: inset 3px 2px 4px 2px #afafaf;
+
+  .component-card, img {
+    display: inline-block;
+    height: 120px;
+  }
+
+  img {
+    margin: 10px;
+    transition: transform 0.3s, filter 0.3s;
+    cursor: pointer;
+
+    &:hover {
+      transform: scale(1.01);
+      filter: saturate(1.3);
+    }
+  }
+}

@@ -69,6 +69,12 @@
     </div>
 </div>
 
+<div class="components-panel">
+  <div class="component-card" *ngFor="let component of storedComponents">
+    <img src="{{component.imgSrc}}" (mousedown)="insertComponent(component)" alt="">
+  </div>
+</div>
+
 <div class="help-panel">
 
   <div class="chunk">
